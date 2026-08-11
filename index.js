@@ -29,6 +29,36 @@ async function runStableAPIConnect() {
     // Connect the client to the server (optional starting in v4.7)
     await client.connect();
 
+    // create mongodb database
+    const database = client.db("zap_shift_db");
+
+    const parcelsCollection = database.collection("parcels");
+
+    // parcel api
+    app.get("/parcels", async (req, res) => {
+      const query = {};
+
+      //localhost:3000/parcels?email=senderEmail
+      const { email } = req.query;
+      if (email) {
+        query.senderEmail = email;
+      }
+
+      const cursor = parcelsCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.post("/parcels", async (req, res) => {
+      const parcel = req.body;
+
+      //parcel createdTime
+      parcel.createdAt = new Date();
+
+      const result = await parcelsCollection.insertOne(parcel);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     const result = await client.db("admin").command({ ping: 1 });
     console.log(
