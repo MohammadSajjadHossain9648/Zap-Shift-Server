@@ -44,7 +44,10 @@ async function runStableAPIConnect() {
         query.senderEmail = email;
       }
 
-      const cursor = parcelsCollection.find(query);
+      // sort the parcel table
+      const options = { sort: { createdAt: -1 } };
+
+      const cursor = parcelsCollection.find(query, options);
       const result = await cursor.toArray();
       res.send(result);
     });
