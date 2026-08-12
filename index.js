@@ -10,7 +10,7 @@ app.use(express.json());
 app.use(cors());
 
 // mongodb
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 // Replace the placeholder with your Atlas connection string
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.bizjnmd.mongodb.net/?appName=Cluster0`;
@@ -49,6 +49,13 @@ async function runStableAPIConnect() {
 
       const cursor = parcelsCollection.find(query, options);
       const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.get("/parcels/:parcelId", async (req, res) => {
+      const id = req.params.parcelId;
+      const query = { _id: new ObjectId(id) };
+      const result = await parcelsCollection.findOne(query);
       res.send(result);
     });
 
