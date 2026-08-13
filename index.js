@@ -69,6 +69,13 @@ async function runStableAPIConnect() {
       res.send(result);
     });
 
+    app.delete("/parcels/:parcelId", async (req, res) => {
+      const id = req.params.parcelId;
+      const query = { _id: new ObjectId(id) };
+      const result = await parcelsCollection.deleteOne(query);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     const result = await client.db("admin").command({ ping: 1 });
     console.log(
