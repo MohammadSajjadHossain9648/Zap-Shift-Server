@@ -121,6 +121,27 @@ async function runStableAPIConnect() {
       res.send({ url: session.url });
     });
 
+    //payment success page api
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      // console.log("session retrieve", session);
+
+      if (session.payment_status === "paid") {
+        const id = session.metadata.parcelId;
+        const query = { _id: new ObjectId(id) };
+        const update = {
+          $set: {
+            paymentStatus: "paid",
+          },
+        };
+        const result = await parcelsCollection.updateOne(query, update);
+        res.send(result);
+      }
+
+      res.send({ success: false });
+    });
+
     // extra
     // Send a ping to confirm a successful connection
     const result = await client.db("admin").command({ ping: 1 });
