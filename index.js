@@ -24,6 +24,9 @@ const client = new MongoClient(uri, {
   },
 });
 
+//stripe payment method
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
+
 async function runStableAPIConnect() {
   try {
     // Connect the client to the server (optional starting in v4.7)
@@ -76,6 +79,49 @@ async function runStableAPIConnect() {
       res.send(result);
     });
 
+    // stripe payment api
+    app.post("/payment-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      // console.log("payment info in payment-checkout-session", paymentInfo);
+
+      // Original cost is BDT
+      const bdtCost = parseFloat(paymentInfo.cost);
+      // Convert BDT → USD
+      const usdCost = bdtCost / 127.5856;
+      // Stripe uses cents
+      const stripeAmount = Math.round(usdCost * 100);
+
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: stripeAmount,
+              product_data: {
+                name: paymentInfo.parcelName,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        customer_email: paymentInfo.senderEmail,
+        metadata: {
+          parcelId: paymentInfo.parcelId,
+          parcelName: paymentInfo.parcelName,
+        },
+        mode: "payment",
+        success_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-cancelled?parcelId=${paymentInfo.parcelId}`,
+
+        // Provide a name (for example, hosted_web_0001) to label this Checkout integration and measure its conversion independently
+        // integration_identifier: "{{INTEGRATION_ID}}",
+      });
+
+      // console.log("backend session", session);
+      res.send({ url: session.url });
+    });
+
+    // extra
     // Send a ping to confirm a successful connection
     const result = await client.db("admin").command({ ping: 1 });
     console.log(
