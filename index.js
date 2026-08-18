@@ -27,6 +27,16 @@ const client = new MongoClient(uri, {
 //stripe payment method
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
+// create a random parcel tracking id
+const crypto = require("crypto");
+const generateTrackingId = () => {
+  const prefix = "PRCL"; // your brand prefix
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  const randomCode = crypto.randomBytes(3).toString("hex").toUpperCase(); // 6-char random hex
+
+  return `${prefix}-${date}-${randomCode}`;
+};
+
 async function runStableAPIConnect() {
   try {
     // Connect the client to the server (optional starting in v4.7)
@@ -36,13 +46,14 @@ async function runStableAPIConnect() {
     const database = client.db("zap_shift_db");
 
     const parcelsCollection = database.collection("parcels");
+    const paymentsCollection = database.collection("payments");
 
     // parcel api
     app.get("/parcels", async (req, res) => {
+      const { email } = req.query; //same as -> const email = req.query.email;
       const query = {};
 
       //localhost:3000/parcels?email=senderEmail
-      const { email } = req.query;
       if (email) {
         query.senderEmail = email;
       }
@@ -65,7 +76,9 @@ async function runStableAPIConnect() {
     app.post("/parcels", async (req, res) => {
       const parcel = req.body;
 
-      //parcel createdTime
+      //parcel createdTime and tracking id
+      const trackingId = generateTrackingId();
+      parcel.trackingId = trackingId;
       parcel.createdAt = new Date();
 
       const result = await parcelsCollection.insertOne(parcel);
@@ -104,12 +117,14 @@ async function runStableAPIConnect() {
             quantity: 1,
           },
         ],
+        mode: "payment",
         customer_email: paymentInfo.senderEmail,
         metadata: {
           parcelId: paymentInfo.parcelId,
           parcelName: paymentInfo.parcelName,
+          cost: paymentInfo.cost,
+          trackingId: paymentInfo.trackingId,
         },
-        mode: "payment",
         success_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-cancelled?parcelId=${paymentInfo.parcelId}`,
 
@@ -127,6 +142,19 @@ async function runStableAPIConnect() {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       // console.log("session retrieve", session);
 
+      // check is the parcel paid or not
+      const transactionId = session.payment_intent;
+      const query = { transactionId: transactionId };
+      const paymentExist = await paymentsCollection.findOne(query);
+
+      if (paymentExist) {
+        return res.send({
+          message: "payment already exist",
+          transactionId: paymentExist.transactionId,
+          trackingId: paymentExist.trackingId,
+        });
+      }
+
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
         const query = { _id: new ObjectId(id) };
@@ -136,7 +164,34 @@ async function runStableAPIConnect() {
           },
         };
         const result = await parcelsCollection.updateOne(query, update);
-        res.send(result);
+
+        const payment = {
+          parcelId: session.metadata.parcelId,
+          parcelName: session.metadata.parcelName,
+          amount: session.metadata.cost,
+          currency: session.currency,
+
+          customerEmail: session.customer_email,
+
+          paymentStatus: session.payment_status,
+          paidAt: new Date(),
+          transactionId: session.payment_intent,
+          trackingId: session.metadata.trackingId,
+        };
+
+        // console.log("payment-success payment", payment);
+
+        if (session.payment_status === "paid") {
+          const resultPayment = await paymentsCollection.insertOne(payment);
+
+          res.send({
+            success: true,
+            modifyParcel: result,
+            paymentInfo: resultPayment,
+            transactionId: session.payment_intent,
+            trackingId: session.metadata.trackingId,
+          });
+        }
       }
 
       res.send({ success: false });
