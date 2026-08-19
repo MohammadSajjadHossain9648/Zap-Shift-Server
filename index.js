@@ -209,7 +209,14 @@ async function runStableAPIConnect() {
       const options = { sort: { paidAt: -1 } };
 
       const cursor = paymentsCollection.find(query, options);
-      const result = cursor.toArray();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.get("/payments/:parcelId", async (req, res) => {
+      const id = req.params.parcelId;
+      const query = { _id: new ObjectId(id) };
+      const result = await paymentsCollection.findOne(query);
       res.send(result);
     });
 
