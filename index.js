@@ -197,6 +197,22 @@ async function runStableAPIConnect() {
       res.send({ success: false });
     });
 
+    // payment related api
+    app.get("/payments", async (req, res) => {
+      const { email } = req.query;
+      const query = {};
+
+      if (email) {
+        query.customerEmail = email;
+      }
+
+      const options = { sort: { paidAt: -1 } };
+
+      const cursor = paymentsCollection.find(query, options);
+      const result = cursor.toArray();
+      res.send(result);
+    });
+
     // extra
     // Send a ping to confirm a successful connection
     const result = await client.db("admin").command({ ping: 1 });
