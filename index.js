@@ -49,6 +49,18 @@ async function runStableAPIConnect() {
     const paymentsCollection = database.collection("payments");
 
     // parcel api
+    app.post("/parcels", async (req, res) => {
+      const parcel = req.body;
+
+      //parcel createdTime and tracking id
+      const trackingId = generateTrackingId();
+      parcel.trackingId = trackingId;
+      parcel.createdAt = new Date();
+
+      const result = await parcelsCollection.insertOne(parcel);
+      res.send(result);
+    });
+
     app.get("/parcels", async (req, res) => {
       const { email } = req.query; //same as -> const email = req.query.email;
       const query = {};
@@ -70,18 +82,6 @@ async function runStableAPIConnect() {
       const id = req.params.parcelId;
       const query = { _id: new ObjectId(id) };
       const result = await parcelsCollection.findOne(query);
-      res.send(result);
-    });
-
-    app.post("/parcels", async (req, res) => {
-      const parcel = req.body;
-
-      //parcel createdTime and tracking id
-      const trackingId = generateTrackingId();
-      parcel.trackingId = trackingId;
-      parcel.createdAt = new Date();
-
-      const result = await parcelsCollection.insertOne(parcel);
       res.send(result);
     });
 
